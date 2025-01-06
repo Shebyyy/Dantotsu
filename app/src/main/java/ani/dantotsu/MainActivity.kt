@@ -51,6 +51,7 @@ import ani.dantotsu.others.calc.CalcActivity
 import ani.dantotsu.profile.ProfileActivity
 import ani.dantotsu.profile.activity.FeedActivity
 import ani.dantotsu.profile.notification.NotificationActivity
+import ani.dantotsu.settings.AddRepositoryBottomSheet
 import ani.dantotsu.settings.ExtensionsActivity
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefManager.asLiveBool
@@ -116,58 +117,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val action = intent.action
-        val type = intent.type
-        if (Intent.ACTION_VIEW == action && type != null) {
-            val uri: Uri? = intent.data
-            try {
-                if (uri == null) {
-                    throw Exception("Uri is null")
-                }
-                val jsonString =
-                    contentResolver.openInputStream(uri)?.readBytes()
-                        ?: throw Exception("Error reading file")
-                val name =
-                    DocumentFile.fromSingleUri(this, uri)?.name ?: "settings"
-                //.sani is encrypted, .ani is not
-                if (name.endsWith(".sani")) {
-                    passwordAlertDialog { password ->
-                        if (password != null) {
-                            val salt = jsonString.copyOfRange(0, 16)
-                            val encrypted = jsonString.copyOfRange(16, jsonString.size)
-                            val decryptedJson = try {
-                                PreferenceKeystore.decryptWithPassword(
-                                    password,
-                                    encrypted,
-                                    salt
-                                )
-                            } catch (e: Exception) {
-                                toast("Incorrect password")
-                                return@passwordAlertDialog
-                            }
-                            if (PreferencePackager.unpack(decryptedJson)) {
-                                val intent = Intent(this, this.javaClass)
-                                this.finish()
-                                startActivity(intent)
-                            }
-                        } else {
-                            toast("Password cannot be empty")
-                        }
-                    }
-                } else if (name.endsWith(".ani")) {
-                    val decryptedJson = jsonString.toString(Charsets.UTF_8)
-                    if (PreferencePackager.unpack(decryptedJson)) {
-                        val intent = Intent(this, this.javaClass)
-                        this.finish()
-                        startActivity(intent)
-                    }
-                } else {
-                    toast("Invalid file type")
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                toast("Error importing settings")
-            }
+        if (Intent.ACTION_VIEW == intent.action) {
+            handleViewIntent(intent)
         }
 
         val bottomNavBar = findViewById<AnimatedBottomBar>(R.id.navbar)
@@ -287,7 +238,7 @@ class MainActivity : AppCompatActivity() {
                     .get() > 0 || preferences.mangaExtensionUpdatesCount().get() > 0
             ) {
                 snackString(R.string.extension_updates_available)
-                    ?.setDuration(Snackbar.LENGTH_LONG)
+                    ?.setDuration(Snackbar.LENGTH_SHORT)
                     ?.setAction(R.string.review) {
                         startActivity(Intent(this, ExtensionsActivity::class.java))
                     }
@@ -490,6 +441,76 @@ class MainActivity : AppCompatActivity() {
         val params: ViewGroup.MarginLayoutParams =
             binding.includedNavbar.navbar.layoutParams as ViewGroup.MarginLayoutParams
         params.updateMargins(bottom = margin.toPx)
+    }
+
+    private fun handleViewIntent(intent: Intent) {
+        val uri: Uri? = intent.data
+        try {
+            if (uri == null) {
+                throw Exception("Uri is null")
+            }
+            if ((uri.scheme == "tachiyomi" || uri.scheme == "aniyomi" || uri.scheme == "novelyomi") && uri.host == "add-repo") {
+                val url = uri.getQueryParameter("url") ?: throw Exception("No url for repo import")
+                val (prefName, name) = when (uri.scheme) {
+                    "tachiyomi" -> PrefName.MangaExtensionRepos to "Manga"
+                    "aniyomi" -> PrefName.AnimeExtensionRepos to "Anime"
+                    "novelyomi" -> PrefName.NovelExtensionRepos to "Novel"
+                    else -> throw Exception("Invalid scheme")
+                }
+                val savedRepos: Set<String> = PrefManager.getVal(prefName)
+                val newRepos = savedRepos.toMutableSet()
+                AddRepositoryBottomSheet.addRepoWarning(this) {
+                    newRepos.add(url)
+                    PrefManager.setVal(prefName, newRepos)
+                    toast("$name Extension Repo added")
+                }
+                return
+            }
+            if (intent.type == null) return
+            val jsonString =
+                contentResolver.openInputStream(uri)?.readBytes()
+                    ?: throw Exception("Error reading file")
+            val name =
+                DocumentFile.fromSingleUri(this, uri)?.name ?: "settings"
+            //.sani is encrypted, .ani is not
+            if (name.endsWith(".sani")) {
+                passwordAlertDialog { password ->
+                    if (password != null) {
+                        val salt = jsonString.copyOfRange(0, 16)
+                        val encrypted = jsonString.copyOfRange(16, jsonString.size)
+                        val decryptedJson = try {
+                            PreferenceKeystore.decryptWithPassword(
+                                password,
+                                encrypted,
+                                salt
+                            )
+                        } catch (e: Exception) {
+                            toast("Incorrect password")
+                            return@passwordAlertDialog
+                        }
+                        if (PreferencePackager.unpack(decryptedJson)) {
+                            val newIntent = Intent(this, this.javaClass)
+                            this.finish()
+                            startActivity(newIntent)
+                        }
+                    } else {
+                        toast("Password cannot be empty")
+                    }
+                }
+            } else if (name.endsWith(".ani")) {
+                val decryptedJson = jsonString.toString(Charsets.UTF_8)
+                if (PreferencePackager.unpack(decryptedJson)) {
+                    val newIntent = Intent(this, this.javaClass)
+                    this.finish()
+                    startActivity(newIntent)
+                }
+            } else {
+                toast("Invalid file type")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            toast("Error importing settings")
+        }
     }
 
     private fun passwordAlertDialog(callback: (CharArray?) -> Unit) {

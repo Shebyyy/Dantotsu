@@ -2,7 +2,6 @@ package ani.dantotsu.media.manga.mangareader
 
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -58,8 +57,6 @@ import ani.dantotsu.media.Media
 import ani.dantotsu.media.MediaDetailsViewModel
 import ani.dantotsu.media.MediaNameAdapter
 import ani.dantotsu.media.MediaSingleton
-import ani.dantotsu.media.anime.ExoplayerView
-import ani.dantotsu.media.anime.ExoplayerView.Companion
 import ani.dantotsu.media.manga.MangaCache
 import ani.dantotsu.media.manga.MangaChapter
 import ani.dantotsu.others.ImageViewDialog
@@ -196,8 +193,9 @@ class MangaReaderActivity : AppCompatActivity() {
                 finish()
                 return@addCallback
             }
-            val chapter = (MediaNameAdapter.findChapterNumber(media.manga!!.selectedChapter!!)
-                ?.minus(1L) ?: 0).toString()
+            val chapter =
+                (MediaNameAdapter.findChapterNumber(media.manga!!.selectedChapter!!.number)
+                    ?.minus(1L) ?: 0).toString()
             if (chapter == "0.0" && PrefManager.getVal(PrefName.ChapterZeroReader)
                 // Not asking individually or incognito
                 && !showProgressDialog && !PrefManager.getVal<Boolean>(PrefName.Incognito)
@@ -279,7 +277,7 @@ class MangaReaderActivity : AppCompatActivity() {
         defaultSettings = loadReaderSettings("${media.id}_current_settings") ?: defaultSettings
 
         chapters = media.manga?.chapters ?: return
-        chapter = chapters[media.manga!!.selectedChapter] ?: return
+        chapter = chapters[media.manga!!.selectedChapter!!.uniqueNumber()] ?: return
 
         model.mangaReadSources = if (media.isAdult) HMangaSources else MangaSources
         binding.mangaReaderSource.isVisible = PrefManager.getVal(PrefName.ShowSource)
@@ -309,7 +307,7 @@ class MangaReaderActivity : AppCompatActivity() {
         binding.mangaReaderTitle.text = media.userPreferredName
 
         chaptersArr = chapters.keys.toList()
-        currentChapterIndex = chaptersArr.indexOf(media.manga!!.selectedChapter)
+        currentChapterIndex = chaptersArr.indexOf(media.manga!!.selectedChapter!!.uniqueNumber())
 
         chaptersTitleArr = arrayListOf()
         chapters.forEach {
@@ -394,10 +392,10 @@ class MangaReaderActivity : AppCompatActivity() {
         model.getMangaChapter().observe(this) { chap ->
             if (chap != null) {
                 chapter = chap
-                media.manga!!.selectedChapter = chapter.number
+                media.manga!!.selectedChapter = chapter
                 media.selected = model.loadSelected(media)
                 PrefManager.setCustomVal("${media.id}_current_chp", chap.number)
-                currentChapterIndex = chaptersArr.indexOf(chap.number)
+                currentChapterIndex = chaptersArr.indexOf(chap.uniqueNumber())
                 binding.mangaReaderChapterSelect.setSelection(currentChapterIndex)
                 if (directionRLBT) {
                     binding.mangaReaderNextChap.text =
@@ -1036,7 +1034,7 @@ class MangaReaderActivity : AppCompatActivity() {
                         PrefManager.setCustomVal("${media.id}_save_progress", true)
                         updateProgress(
                             media,
-                            MediaNameAdapter.findChapterNumber(media.manga!!.selectedChapter!!)
+                            MediaNameAdapter.findChapterNumber(media.manga!!.selectedChapter!!.number)
                                 .toString()
                         )
                         runnable.run()
@@ -1057,7 +1055,7 @@ class MangaReaderActivity : AppCompatActivity() {
                 )
                     updateProgress(
                         media,
-                        MediaNameAdapter.findChapterNumber(media.manga!!.selectedChapter!!)
+                        MediaNameAdapter.findChapterNumber(media.manga!!.selectedChapter!!.number)
                             .toString()
                     )
                 runnable.run()

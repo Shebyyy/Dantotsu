@@ -8,8 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
-import android.widget.CheckBox
-import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
@@ -156,6 +154,16 @@ class SettingsCommonActivity : AppCompatActivity() {
                         isActivity = true
                     ),
                     Settings(
+                        type = 2,
+                        name = getString(R.string.open_animanga_directly),
+                        desc = getString(R.string.open_animanga_directly_info),
+                        icon = R.drawable.ic_round_search_24,
+                        isChecked = PrefManager.getVal(PrefName.AniMangaSearchDirect),
+                        switch = { isChecked, _ ->
+                            PrefManager.setVal(PrefName.AniMangaSearchDirect, isChecked)
+                        }
+                    ),
+                    Settings(
                         type = 1,
                         name = getString(R.string.download_manager_select),
                         desc = getString(R.string.download_manager_select_desc),
@@ -221,7 +229,7 @@ class SettingsCommonActivity : AppCompatActivity() {
                                     }
                                 }
                                 setNegButton(R.string.cancel)
-                                setNeutralButton(R.string.remove){
+                                setNeutralButton(R.string.remove) {
                                     PrefManager.setVal(PrefName.AppPassword, "")
                                     PrefManager.setVal(PrefName.BiometricToken, "")
                                     PrefManager.setVal(PrefName.OverridePassword, false)
@@ -305,10 +313,10 @@ class SettingsCommonActivity : AppCompatActivity() {
                         desc = getString(R.string.change_download_location_desc),
                         icon = R.drawable.ic_round_source_24,
                         onClick = {
-                            context.customAlertDialog().apply{
+                            context.customAlertDialog().apply {
                                 setTitle(R.string.change_download_location)
                                 setMessage(R.string.download_location_msg)
-                                setPosButton(R.string.ok){
+                                setPosButton(R.string.ok) {
                                     val oldUri = PrefManager.getVal<String>(PrefName.DownloadsDir)
                                     launcher.registerForCallback { success ->
                                         if (success) {

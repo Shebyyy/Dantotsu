@@ -82,13 +82,21 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
         trendingBinding.notificationCount.isVisible = Anilist.unreadNotificationCount > 0
                 && PrefManager.getVal<Boolean>(PrefName.ShowNotificationRedDot) == true
         trendingBinding.notificationCount.text = Anilist.unreadNotificationCount.toString()
-        trendingBinding.searchBar.hint = "MANGA"
+        trendingBinding.searchBar.hint = binding.root.context.getString(R.string.search)
         trendingBinding.searchBarText.setOnClickListener {
-            ContextCompat.startActivity(
-                it.context,
-                Intent(it.context, SearchActivity::class.java).putExtra("type", "MANGA"),
-                null
-            )
+            val context = binding.root.context
+            if (PrefManager.getVal(PrefName.AniMangaSearchDirect) && Anilist.token != null) {
+                ContextCompat.startActivity(
+                    context,
+                    Intent(context, SearchActivity::class.java).putExtra("type", "MANGA"),
+                    null
+                )
+            } else {
+                SearchBottomSheet.newInstance().show(
+                    (context as AppCompatActivity).supportFragmentManager,
+                    "search"
+                )
+            }
         }
 
         trendingBinding.userAvatar.setSafeOnClickListener {
@@ -258,10 +266,10 @@ class MangaPageAdapter : RecyclerView.Adapter<MangaPageAdapter.MangaPageViewHold
         adaptor: MediaAdaptor,
         recyclerView: RecyclerView,
         progress: View,
-        title: View ,
-        more: View ,
+        title: View,
+        more: View,
         string: String,
-        media : MutableList<Media>
+        media: MutableList<Media>
     ) {
         progress.visibility = View.GONE
         recyclerView.adapter = adaptor

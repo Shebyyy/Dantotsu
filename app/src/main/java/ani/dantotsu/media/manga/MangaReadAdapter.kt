@@ -1,6 +1,7 @@
 package ani.dantotsu.media.manga
 
 import android.content.Intent
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,6 +11,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.getString
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -20,8 +22,8 @@ import ani.dantotsu.currActivity
 import ani.dantotsu.currContext
 import ani.dantotsu.databinding.CustomDialogLayoutBinding
 import ani.dantotsu.databinding.DialogLayoutBinding
-import ani.dantotsu.databinding.ItemMediaSourceBinding
 import ani.dantotsu.databinding.ItemChipBinding
+import ani.dantotsu.databinding.ItemMediaSourceBinding
 import ani.dantotsu.isOnline
 import ani.dantotsu.loadImage
 import ani.dantotsu.media.Media
@@ -40,6 +42,7 @@ import ani.dantotsu.px
 import ani.dantotsu.settings.FAQActivity
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
+import ani.dantotsu.snackString
 import ani.dantotsu.toast
 import ani.dantotsu.util.customAlertDialog
 import com.google.android.material.chip.Chip
@@ -62,8 +65,18 @@ class MangaReadAdapter(
     var scanlatorSelectionListener: ScanlatorSelectionListener? = null
     var options = listOf<String>()
 
+    private fun clearCustomValsForMedia(mediaId: String, suffix: String) {
+        val customVals = PrefManager.getAllCustomValsForMedia("$mediaId$suffix")
+        customVals.forEach { (key) ->
+            PrefManager.removeCustomVal(key)
+            Log.d("PrefManager", "Removed key: $key")
+        }
+    }
+
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val bind = ItemMediaSourceBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        val bind =
+            ItemMediaSourceBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return ViewHolder(bind)
     }
 
@@ -86,6 +99,21 @@ class MangaReadAdapter(
             )
         }
         val offline = !isOnline(binding.root.context) || PrefManager.getVal(PrefName.OfflineMode)
+        //for removing saved progress
+        binding.sourceTitle.setOnLongClickListener {
+            fragment.requireContext().customAlertDialog().apply {
+                setTitle(" Delete Progress for all chapters of ${media.nameRomaji}")
+                setMessage("This will delete all the locally stored progress for chapters")
+                setPosButton(R.string.ok) {
+                    clearCustomValsForMedia("${media.id}", "_Chapter")
+                    clearCustomValsForMedia("${media.id}", "_Vol")
+                    snackString("Deleted the progress of Chapters for ${media.nameRomaji}")
+                }
+                setNegButton(R.string.no)
+                show()
+            }
+            true
+        }
 
         binding.mediaSourceNameContainer.isGone = offline
         binding.mediaSourceSettings.isGone = offline
@@ -255,6 +283,22 @@ class MangaReadAdapter(
                         show()
                     }
                 }
+                resetProgress.setOnClickListener {
+                    fragment.requireContext().customAlertDialog().apply {
+                        setTitle(" Delete Progress for all chapters of ${media.nameRomaji}")
+                        setMessage("This will delete all the locally stored progress for chapters")
+                        setPosButton(R.string.ok) {
+// Usage
+                            clearCustomValsForMedia("${media.id}", "_Chapter")
+                            clearCustomValsForMedia("${media.id}", "_Vol")
+
+                            snackString("Deleted the progress of Chapters for ${media.nameRomaji}")
+                        }
+                        setNegButton(R.string.no)
+                        show()
+                    }
+                }
+                resetProgressDef.text = getString(currContext()!!, R.string.clear_stored_chapter)
 
                 // Scanlator
                 mangaScanlatorContainer.isVisible = options.count() > 1
@@ -288,12 +332,17 @@ class MangaReadAdapter(
                         val checkBox = CheckBox(currContext()).apply {
                             text = option
                             setOnCheckedChangeListener { _, _ ->
-                                tickAllButton.setImageResource(getToggleImageResource(checkboxContainer))
+                                tickAllButton.setImageResource(
+                                    getToggleImageResource(
+                                        checkboxContainer
+                                    )
+                                )
                             }
                         }
 
                         if (media.selected!!.scanlators != null) {
-                            checkBox.isChecked = media.selected!!.scanlators?.contains(option) != true
+                            checkBox.isChecked =
+                                media.selected!!.scanlators?.contains(option) != true
                             scanlatorSelectionListener?.onScanlatorsSelected()
                         } else {
                             checkBox.isChecked = true
@@ -379,12 +428,12 @@ class MangaReadAdapter(
                 val startChapter = MediaNameAdapter.findChapterNumber(names[limit * (position)])
                 val endChapter = MediaNameAdapter.findChapterNumber(names[last - 1])
                 val startChapterString = if (startChapter != null) {
-                    "Ch.$startChapter"
+                    "Ch.%.1f".format(startChapter)
                 } else {
                     names[limit * (position)]
                 }
                 val endChapterString = if (endChapter != null) {
-                    "Ch.$endChapter"
+                    "Ch.%.1f".format(endChapter)
                 } else {
                     names[last - 1]
                 }
@@ -429,7 +478,6 @@ class MangaReadAdapter(
         val binding = _binding
         if (binding != null) {
             if (media.manga?.chapters != null) {
-                val chapters = media.manga.chapters!!.keys.toTypedArray()
                 val anilistEp = (media.userProgress ?: 0).plus(1)
                 val appEp = PrefManager.getNullableCustomVal(
                     "${media.id}_current_chp",
@@ -437,37 +485,43 @@ class MangaReadAdapter(
                     String::class.java
                 )
                     ?.toIntOrNull() ?: 1
-                var continueEp = (if (anilistEp > appEp) anilistEp else appEp).toString()
-                val filteredChapters = chapters.filter { chapterKey ->
-                    val chapter = media.manga.chapters!![chapterKey]!!
-                    chapter.scanlator !in hiddenScanlators
+                val continueNumber = (if (anilistEp > appEp) anilistEp else appEp).toString()
+                val filteredChapters = media.manga.chapters!!.filter { chapter ->
+                    if (mangaReadSources[media.selected!!.sourceIndex] is OfflineMangaParser) {
+                        true
+                    } else {
+                        chapter.value.scanlator !in hiddenScanlators
+                    }
                 }
                 val formattedChapters = filteredChapters.map {
-                    MediaNameAdapter.findChapterNumber(it)?.toInt()?.toString()
+                    MediaNameAdapter.findChapterNumber(it.value.number)?.toInt()
+                        ?.toString() to it.key
                 }
-                if (formattedChapters.contains(continueEp)) {
-                    continueEp = chapters[formattedChapters.indexOf(continueEp)]
+                if (formattedChapters.any { it.first == continueNumber }) {
+                    var continueEp =
+                        media.manga.chapters!![formattedChapters.first { it.first == continueNumber }.second]
                     binding.sourceContinue.visibility = View.VISIBLE
                     handleProgress(
                         binding.itemMediaProgressCont,
                         binding.itemMediaProgress,
                         binding.itemMediaProgressEmpty,
                         media.id,
-                        continueEp
+                        continueEp!!.number
                     )
                     if ((binding.itemMediaProgress.layoutParams as LinearLayout.LayoutParams).weight > 0.8f) {
-                        val e = chapters.indexOf(continueEp)
-                        if (e != -1 && e + 1 < chapters.size) {
-                            continueEp = chapters[e + 1]
+                        val numberPlusOne =
+                            formattedChapters.indexOfFirst { it.first?.toIntOrNull() == continueNumber.toInt() + 1 }
+                        if (numberPlusOne != -1) {
+                            continueEp =
+                                media.manga.chapters!![formattedChapters[numberPlusOne].second]
                         }
                     }
-                    val ep = media.manga.chapters!![continueEp]!!
                     binding.itemMediaImage.loadImage(media.banner ?: media.cover)
                     binding.mediaSourceContinueText.text =
                         currActivity()!!.getString(
                             R.string.continue_chapter,
-                            ep.number,
-                            if (!ep.title.isNullOrEmpty()) ep.title else ""
+                            continueEp!!.number,
+                            if (!continueEp.title.isNullOrEmpty()) continueEp.title else ""
                         )
                     binding.sourceContinue.setOnClickListener {
                         fragment.onMangaChapterClick(continueEp)
@@ -486,7 +540,8 @@ class MangaReadAdapter(
                 binding.sourceProgressBar.visibility = View.GONE
 
                 val sourceFound = filteredChapters.isNotEmpty()
-                val isDownloadedSource = mangaReadSources[media.selected!!.sourceIndex] is OfflineMangaParser
+                val isDownloadedSource =
+                    mangaReadSources[media.selected!!.sourceIndex] is OfflineMangaParser
 
                 if (isDownloadedSource) {
                     binding.sourceNotFound.text = if (sourceFound) {
@@ -495,7 +550,8 @@ class MangaReadAdapter(
                         currActivity()!!.getString(R.string.download_not_found)
                     }
                 } else {
-                    binding.sourceNotFound.text = currActivity()!!.getString(R.string.source_not_found)
+                    binding.sourceNotFound.text =
+                        currActivity()!!.getString(R.string.source_not_found)
                 }
 
                 binding.sourceNotFound.isGone = sourceFound

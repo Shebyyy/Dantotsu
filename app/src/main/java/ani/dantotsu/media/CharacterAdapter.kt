@@ -16,7 +16,7 @@ import ani.dantotsu.setAnimation
 import java.io.Serializable
 
 class CharacterAdapter(
-    private val characterList: ArrayList<Character>
+    private val characterList: MutableList<Character>
 ) : RecyclerView.Adapter<CharacterAdapter.CharacterViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CharacterViewHolder {
         val binding =
@@ -27,9 +27,8 @@ class CharacterAdapter(
     override fun onBindViewHolder(holder: CharacterViewHolder, position: Int) {
         val binding = holder.binding
         setAnimation(binding.root.context, holder.binding.root)
-        val character = characterList[position]
-        val whitespace = "${character.role}  "
-        character.voiceActor
+        val character = characterList.getOrNull(position) ?: return
+        val whitespace = "${if (character.role.lowercase() == "null") "" else character.role}  "
         binding.itemCompactRelation.text = whitespace
         binding.itemCompactImage.loadImage(character.image)
         binding.itemCompactTitle.text = character.name
@@ -56,7 +55,11 @@ class CharacterAdapter(
                     ).toBundle()
                 )
             }
-            itemView.setOnLongClickListener { copyToClipboard(characterList[bindingAdapterPosition].name ?: ""); true }
+            itemView.setOnLongClickListener {
+                copyToClipboard(
+                    characterList[bindingAdapterPosition].name ?: ""
+                ); true
+            }
         }
     }
 }

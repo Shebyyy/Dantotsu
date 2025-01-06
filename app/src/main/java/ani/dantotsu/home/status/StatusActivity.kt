@@ -9,14 +9,13 @@ import androidx.core.view.updateLayoutParams
 import ani.dantotsu.R
 import ani.dantotsu.connections.anilist.api.Activity
 import ani.dantotsu.databinding.ActivityStatusBinding
-import ani.dantotsu.initActivity
-import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.home.status.listener.StoriesCallback
+import ani.dantotsu.initActivity
 import ani.dantotsu.navBarHeight
 import ani.dantotsu.profile.User
 import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.statusBarHeight
-import ani.dantotsu.toast
+import ani.dantotsu.themes.ThemeManager
 import ani.dantotsu.util.Logger
 
 class StatusActivity : AppCompatActivity(), StoriesCallback {
@@ -47,8 +46,8 @@ class StatusActivity : AppCompatActivity(), StoriesCallback {
         val key = "activities"
         val watchedActivity = PrefManager.getCustomVal<Set<Int>>(key, setOf())
         if (activity.getOrNull(position) != null) {
-            val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity )
-            val startIndex = if ( startFrom > 0) startFrom else 0
+            val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity)
+            val startIndex = if (startFrom > 0) startFrom else 0
             binding.stories.setStoriesList(
                 activityList = activity[position].activity,
                 startIndex = startIndex + 1
@@ -59,6 +58,7 @@ class StatusActivity : AppCompatActivity(), StoriesCallback {
         }
 
     }
+
     private fun findFirstNonMatch(watchedActivity: Set<Int>, activity: List<Activity>): Int {
         for (activityItem in activity) {
             if (activityItem.id !in watchedActivity) {
@@ -87,13 +87,14 @@ class StatusActivity : AppCompatActivity(), StoriesCallback {
             binding.stories.pause()
         }
     }
+
     override fun onStoriesEnd() {
         position += 1
         if (position < activity.size) {
             val key = "activities"
             val watchedActivity = PrefManager.getCustomVal<Set<Int>>(key, setOf())
-            val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity )
-            val startIndex= if ( startFrom > 0) startFrom else 0
+            val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity)
+            val startIndex = if (startFrom > 0) startFrom else 0
             binding.stories.startAnimation(slideOutLeft)
             binding.stories.setStoriesList(activity[position].activity, startIndex + 1)
             binding.stories.startAnimation(slideInRight)
@@ -107,15 +108,16 @@ class StatusActivity : AppCompatActivity(), StoriesCallback {
         if (position >= 0 && activity[position].activity.isNotEmpty()) {
             val key = "activities"
             val watchedActivity = PrefManager.getCustomVal<Set<Int>>(key, setOf())
-            val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity )
-            val startIndex = if ( startFrom > 0) startFrom else 0
+            val startFrom = findFirstNonMatch(watchedActivity, activity[position].activity)
+            val startIndex = if (startFrom > 0) startFrom else 0
             binding.stories.startAnimation(slideOutRight)
-            binding.stories.setStoriesList(activity[position].activity,startIndex + 1)
+            binding.stories.setStoriesList(activity[position].activity, startIndex + 1)
             binding.stories.startAnimation(slideInLeft)
         } else {
             finish()
         }
     }
+
     companion object {
         var user: ArrayList<User> = arrayListOf()
     }

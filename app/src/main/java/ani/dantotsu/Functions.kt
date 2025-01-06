@@ -91,7 +91,6 @@ import androidx.viewpager2.widget.ViewPager2
 import ani.dantotsu.BuildConfig.APPLICATION_ID
 import ani.dantotsu.connections.anilist.Genre
 import ani.dantotsu.connections.anilist.api.FuzzyDate
-import ani.dantotsu.connections.bakaupdates.MangaUpdates
 import ani.dantotsu.connections.crashlytics.CrashlyticsInterface
 import ani.dantotsu.databinding.ItemCountDownBinding
 import ani.dantotsu.media.Media
@@ -106,7 +105,6 @@ import ani.dantotsu.settings.saving.PrefManager
 import ani.dantotsu.settings.saving.PrefName
 import ani.dantotsu.settings.saving.internal.PreferenceKeystore
 import ani.dantotsu.settings.saving.internal.PreferenceKeystore.Companion.generateSalt
-import ani.dantotsu.util.CountUpTimer
 import ani.dantotsu.util.Logger
 import com.bumptech.glide.Glide
 import com.bumptech.glide.RequestBuilder
@@ -119,7 +117,6 @@ import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withC
 import com.bumptech.glide.load.resource.gif.GifDrawable
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
-import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.target.Target
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -140,12 +137,9 @@ import io.noties.markwon.html.TagHandlerNoOp
 import io.noties.markwon.image.AsyncDrawable
 import io.noties.markwon.image.glide.GlideImagesPlugin
 import jp.wasabeef.glide.transformations.BlurTransformation
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import nl.joery.animatedbottombar.AnimatedBottomBar
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -154,10 +148,13 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 import java.lang.reflect.Field
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.collections.set
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.min
@@ -855,6 +852,7 @@ fun savePrefsToDownloads(
         }
     )
 }
+
 @SuppressLint("StringFormatMatches")
 fun savePrefs(serialized: String, path: String, title: String, context: Context): File? {
     var file = File(path, "$title.ani")
@@ -922,6 +920,7 @@ fun shareImage(title: String, bitmap: Bitmap, context: Context) {
     intent.putExtra(Intent.EXTRA_STREAM, contentUri)
     context.startActivity(Intent.createChooser(intent, "Share $title"))
 }
+
 @SuppressLint("StringFormatMatches")
 fun saveImage(image: Bitmap, path: String, imageFileName: String): File? {
     val imageFile = File(path, "$imageFileName.png")
@@ -1012,47 +1011,10 @@ fun countDown(media: Media, view: ViewGroup) {
     }
 }
 
-fun sinceWhen(media: Media, view: ViewGroup) {
-    if (media.status != "RELEASING" && media.status != "HIATUS") return
-    CoroutineScope(Dispatchers.IO).launch {
-        MangaUpdates().search(media.mangaName(), media.startDate)?.let {
-            val latestChapter = MangaUpdates.getLatestChapter(view.context, it)
-            val timeSince = (System.currentTimeMillis() -
-                    (it.metadata.series.lastUpdated!!.timestamp * 1000)) / 1000
-
-            withContext(Dispatchers.Main) {
-                val v =
-                    ItemCountDownBinding.inflate(LayoutInflater.from(view.context), view, false)
-                view.addView(v.root, 0)
-                v.mediaCountdownText.text =
-                    currActivity()?.getString(R.string.chapter_release_timeout, latestChapter)
-
-                object : CountUpTimer(86400000) {
-                    override fun onTick(second: Int) {
-                        val a = second + timeSince
-                        v.mediaCountdown.text = currActivity()?.getString(
-                            R.string.time_format,
-                            a / 86400,
-                            a % 86400 / 3600,
-                            a % 86400 % 3600 / 60,
-                            a % 86400 % 3600 % 60
-                        )
-                    }
-
-                    override fun onFinish() {
-                        // The legend will never die.
-                    }
-                }.start()
-            }
-        }
-    }
-}
-
 fun displayTimer(media: Media, view: ViewGroup) {
     when {
         media.anime != null -> countDown(media, view)
-        media.format == "MANGA" || media.format == "ONE_SHOT" -> sinceWhen(media, view)
-        else -> {} // No timer yet
+        else -> {}
     }
 }
 
@@ -1505,6 +1467,7 @@ fun buildMarkwon(
                         }
                         return false
                     }
+
                     override fun onLoadFailed(
                         e: GlideException?,
                         model: Any?,
@@ -1533,9 +1496,42 @@ fun buildMarkwon(
 }
 
 
-
 fun getYoutubeId(url: String): String {
-    val regex = """(?:youtube\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|(?:youtu\.be|youtube\.com)/)([^"&?/\s]{11})|youtube\.com/""".toRegex()
+    val regex =
+        """(?:youtube\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|(?:youtu\.be|youtube\.com)/)([^"&?/\s]{11})|youtube\.com/""".toRegex()
     val matchResult = regex.find(url)
     return matchResult?.groupValues?.getOrNull(1) ?: ""
+}
+
+fun getLanguageCode(language: String): CharSequence {
+    val locales = Locale.getAvailableLocales()
+    for (locale in locales) {
+        if (locale.displayLanguage.equals(language, ignoreCase = true)) {
+            val lang: CharSequence = locale.language
+            return lang
+
+        }
+    }
+    val out: CharSequence = "null"
+    return out
+}
+
+fun getLanguageName(language: String): String? {
+    val locales = Locale.getAvailableLocales()
+    for (locale in locales) {
+        if (locale.language.equals(language, ignoreCase = true)) {
+            return locale.displayLanguage
+        }
+    }
+    return null
+}
+
+@OptIn(ExperimentalEncodingApi::class)
+fun String.decodeBase64ToString(): String {
+    return try {
+        String(Base64.decode(this), Charsets.UTF_8)
+    } catch (e: Exception) {
+        Logger.log(e)
+        ""
+    }
 }
